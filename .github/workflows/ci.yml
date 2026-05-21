@@ -1,0 +1,57 @@
+name: Python CI
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pytest-django pytest-html
+
+      - name: Run tests
+        working-directory: project
+        env:
+          SECRET_KEY: ${{ secrets.SECRET_KEY }}
+          DEBUG: False
+        run: pytest --html=test-report.html
+
+      - name: Upload reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: reports
+          path: project/test-report.html
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Install Heroku CLI
+        run: curl https://cli-assets.heroku.com/install.sh | sh
+
+      - name: Deploy to Heroku
+        env:
+          HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
+        run: |
+          echo "machine git.heroku.com login heroku password $HEROKU_API_KEY" > ~/.netrc
+          heroku git:remote -a ${{ secrets.HEROKU_APP_NAME }}
+          git push heroku main --force
